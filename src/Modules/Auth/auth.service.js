@@ -1,3 +1,4 @@
+import { OAuth2Client } from "google-auth-library";
 import { hashEnum } from "../../Utils/enums/security.enum.js";
 import {
   BadRequestException,
@@ -12,6 +13,9 @@ import {
 } from "../../Utils/security/hash.security.js";
 import { create, findOne } from "./../../DB/db.repository.js";
 import userModel from "./../../DB/Models/user.model.js";
+import { getNewLoginCredentials } from "../../Utils/tokens/token.js";
+import { CLIENT_ID } from "../../../Config/config.service.js";
+import { ProviderEnum } from "../../Utils/enums/user.enum.js";
 
 export const signup = async (req, res) => {
   const { userName, email, password, phone } = req.body;
@@ -64,12 +68,90 @@ export const login = async (req, res) => {
 
   if (!isMatch) throw BadRequestException({ message: "Invalid credentials" });
 
-  if (user.phone) user.phone = decrypt(user.phone);
+  const tokens = await getNewLoginCredentials(user);
 
   return successResponse({
     res,
     statusCode: 200,
     message: "User logged in successfully",
-    data: { user },
+    data: { tokens },
+  });
+};
+
+// export const refreshToken = async (req, res) => {
+//   // i need access token only
+//   const tokens = await getNewLoginCredentials(req.user);
+
+//   successResponse({
+//     res,
+//     statusCode: 200,
+//     message: "Done",
+//     data: { tokens },
+//   });
+// };
+
+export const refreshToken = async (req, res) => {
+  const { accessToken } = await getNewLoginCredentials(req.user);
+
+  return successResponse({
+    res,
+    statusCode: 200,
+    message: "Done",
+    data: { tokens: { accessToken } },
+  });
+};
+
+async function verifyGoogleAccount({ idToken }) {
+  const client = new OAuth2Client();
+  const ticket = await client.verifyIdToken({
+    idToken,
+    audience: CLIENT_ID,
+  });
+  const payload = ticket.getPayload();
+
+  return payload;
+}
+
+export const loginWithGoogle = async (req, res) => {
+  const { idToken } = req.body;
+  const payload = await verifyGoogleAccount({ idToken });
+
+  const { email, email_verified, given_name, family_name, picture } =
+    await verifyGoogleAccount({ idToken });
+
+  if (!email_verified) throw BadRequestException("Email Not verified");
+
+  const user = await findOne({ model: userModel, filter: { email } });
+  if (user) {
+    if (user.provider === ProviderEnum.Google) {
+      const credentials = await getNewLoginCredentials(user);
+      return successResponse({
+        res,
+        message: "Login Successfully",
+        statusCode: 200,
+        data: { credentials },
+      });
+    }
+  }
+
+  const newUser = await create({
+    model: userModel,
+    data: [
+      {
+        firstName: given_name,
+        lastName: family_name,
+        email,
+        profilePicture: picture,
+        provider: ProviderEnum.Google,
+      },
+    ],
+  });
+
+  const credentials = await getNewLoginCredentials(newUser);
+  return successResponse({
+    res,
+    message: "Create",
+    statusCode: 201,
+    data: { credentials },
   });
 };

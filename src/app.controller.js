@@ -5,9 +5,10 @@ import {
   NotFoundException,
 } from "./Utils/response/error.response.js";
 import connectDB from "./DB/connection.js";
+import cors from "cors";
 
 const bootstrap = async (app, express) => {
-  app.use(express.json());
+  app.use(express.json(), cors());
   await connectDB();
   app.use("/api/v1/auth", authRouter);
   app.use("/api/v1/users", userRouter);

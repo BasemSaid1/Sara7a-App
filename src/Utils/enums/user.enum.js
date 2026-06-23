@@ -1,14 +1,24 @@
 export const GenderEnum = {
-  MALE: 0,
-  FEMALE: 1,
+  Male: 0,
+  Female: 1,
 };
 
 export const RoleEnum = {
-  USER: 0,
-  ADMIN: 1,
+  Admin: 0,
+  User: 1,
 };
 
 export const ProviderEnum = {
-  SYSTEM: 0,
-  GOOGLE: 1,
+  System: 0,
+  Google: 1,
+};
+
+export const signatureEnum = {
+  Admin: 0,
+  User: 1,
+};
+
+export const TokenTypeEnum = {
+  Access: 0,
+  Refresh: 1,
 };

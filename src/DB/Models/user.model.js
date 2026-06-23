@@ -27,7 +27,7 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: function () {
-        return this.provider == ProviderEnum.SYSTEM;
+        return this.provider == ProviderEnum.System;
       },
       minlength: [6, "Password must be at least 6 characters"],
     },
@@ -36,17 +36,17 @@ const userSchema = new mongoose.Schema(
     gender: {
       type: Number,
       enum: Object.values(GenderEnum),
-      default: GenderEnum.MALE,
+      default: GenderEnum.Male,
     },
     role: {
       type: Number,
       enum: Object.values(RoleEnum),
-      default: RoleEnum.USER,
+      default: RoleEnum.User,
     },
     provider: {
       type: Number,
       enum: Object.values(ProviderEnum),
-      default: ProviderEnum.SYSTEM,
+      default: ProviderEnum.System,
     },
     confirmEmail: Date,
     profilePicture: String,
