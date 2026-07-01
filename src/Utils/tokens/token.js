@@ -10,6 +10,7 @@ import {
   REFRESH_TOKEN_USER_EXPIRES_IN,
   REFRESH_TOKEN_USER_SECRET,
 } from "../../../Config/config.service.js";
+import { v4 as uuidv4 } from "uuid";
 
 export const generateToken = ({ payload, secretKey, options }) => {
   return jwt.sign(payload, secretKey, options);
@@ -51,9 +52,10 @@ export const getNewLoginCredentials = async (user) => {
     secretKey: signature.accessSignature,
     options: {
       expiresIn:
-        user.role != RoleEnum.Admin
+        user.role !== RoleEnum.Admin
           ? Number(ACCESS_TOKEN_USER_EXPIRES_IN)
           : Number(ACCESS_TOKEN_ADMIN_EXPIRES_IN),
+      jwtid: uuidv4(),
     },
   });
   const refreshToken = generateToken({
@@ -61,9 +63,10 @@ export const getNewLoginCredentials = async (user) => {
     secretKey: signature.refreshSignature,
     options: {
       expiresIn:
-        user.role != RoleEnum.Admin
+        user.role !== RoleEnum.Admin
           ? Number(REFRESH_TOKEN_USER_EXPIRES_IN)
           : Number(REFRESH_TOKEN_ADMIN_EXPIRES_IN),
+      jwtid: uuidv4(),
     },
   });
 

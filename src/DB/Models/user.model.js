@@ -10,14 +10,14 @@ const userSchema = new mongoose.Schema(
     firstName: {
       type: String,
       required: [true, "First name is required"],
-      minlength: [2, "First name must be at least 2 characters"],
-      maxlength: [50, "First name must be less than 50 characters"],
+      minlength: [3, "First name must be at least 3 characters"],
+      maxlength: [25, "First name must be less than 25 characters"],
     },
     lastName: {
       type: String,
       required: [true, "Last name is required"],
-      minlength: [2, "Last name must be at least 2 characters"],
-      maxlength: [50, "Last name must be less than 50 characters"],
+      minlength: [3, "Last name must be at least 3 characters"],
+      maxlength: [25, "Last name must be less than 50 characters"],
     },
     email: {
       type: String,
@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema(
       required: function () {
         return this.provider == ProviderEnum.System;
       },
-      minlength: [6, "Password must be at least 6 characters"],
+      minlength: [8, "Password must be at least 6 characters"],
     },
     DOB: Date,
     phone: String,
@@ -49,7 +49,12 @@ const userSchema = new mongoose.Schema(
       default: ProviderEnum.System,
     },
     confirmEmail: Date,
+    confirmEmailOTP: String,
+    forgetPasswordOTP: String,
     profilePicture: String,
+    coverPictures: [String],
+    isActive: Boolean,
+    changeCredentialsTime: Date,
   },
   {
     timestamps: true,

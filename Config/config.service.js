@@ -34,3 +34,7 @@ export const REFRESH_TOKEN_USER_EXPIRES_IN =
 
 // GOOGLE OAUTH
 export const CLIENT_ID = process.env.CLIENT_ID;
+
+// SENDING EMAILS
+export const USER_EMAIL = process.env.USER_EMAIL;
+export const USER_PASS = process.env.PASS_EMAIL;

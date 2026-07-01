@@ -3,16 +3,45 @@ import * as authService from "./auth.service.js";
 import { authentication } from "../../Middlewares/authentication.middleware.js";
 import { TokenTypeEnum } from "../../Utils/enums/user.enum.js";
 import { validation } from "../../Middlewares/validate.middleware.js";
-import {
-  loginSchema,
-  loginWithGoogleSchema,
-  signupSchema,
-} from "./auth.validation.js";
+import * as authValidation from "./auth.validation.js";
 
 const router = Router();
 
-router.post("/signup", validation(signupSchema), authService.signup);
-router.post("/login", validation(loginSchema), authService.login);
+router.post(
+  "/signup",
+  validation(authValidation.signupSchema),
+  authService.signup,
+);
+
+router.patch(
+  "/confirm-email",
+  validation(authValidation.confirmEmailSchema),
+  authService.confirmEmail,
+);
+
+router.post(
+  "/login",
+  validation(authValidation.loginSchema),
+  authService.login,
+);
+
+router.patch(
+  "/forget-password",
+  validation(authValidation.forgetPasswordSchema),
+  authService.forgetPassword,
+);
+
+router.patch(
+  "/reset-password",
+  validation(authValidation.resetPasswordSchema),
+  authService.resetPassword,
+);
+
+router.post(
+  "/logout",
+  authentication({ tokenType: TokenTypeEnum.Access }),
+  authService.logout,
+);
 
 router.post(
   "/refresh-token",
@@ -22,7 +51,7 @@ router.post(
 
 router.post(
   "/social-login",
-  validation(loginWithGoogleSchema),
+  validation(authValidation.loginWithGoogleSchema),
   authService.loginWithGoogle,
 );
 

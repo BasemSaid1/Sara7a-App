@@ -55,5 +55,6 @@ export const globalErrorHandler = (err, req, res, next) => {
     stack: err.stack,
     // NODE_ENV: NODE_ENV === "development" ? err.stack : undefined,
     status,
+    extra: err.extra,
   });
 };

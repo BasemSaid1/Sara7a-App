@@ -11,11 +11,19 @@ import {
   compareHash,
   generateHash,
 } from "../../Utils/security/hash.security.js";
-import { create, findOne } from "./../../DB/db.repository.js";
+import {
+  create,
+  findOne,
+  findOneAndUpdate,
+  updateOne,
+} from "./../../DB/db.repository.js";
 import userModel from "./../../DB/Models/user.model.js";
 import { getNewLoginCredentials } from "../../Utils/tokens/token.js";
 import { CLIENT_ID } from "../../../Config/config.service.js";
-import { ProviderEnum } from "../../Utils/enums/user.enum.js";
+import { LogoutTypeEnum, ProviderEnum } from "../../Utils/enums/user.enum.js";
+import TokenModel from "../../DB/Models/token.model.js";
+import { generateOTP } from "./../../Utils/generateOTP.utils.js";
+import { emailEvent } from "../../Utils/events/email.events.js";
 
 export const signup = async (req, res) => {
   const { userName, email, password, phone } = req.body;
@@ -26,9 +34,15 @@ export const signup = async (req, res) => {
 
   // hash pass
 
+  const otp = generateOTP();
+  const otpHashed = await generateHash({
+    plainText: otp,
+    algorithm: hashEnum.Argon2,
+  });
+
   let hashedPassword = await generateHash({
     plainText: password,
-    algorithm: hashEnum.Bcrypt,
+    algorithm: hashEnum.Argon2,
   });
 
   // encrypted phone number
@@ -38,9 +52,19 @@ export const signup = async (req, res) => {
   const user = await create({
     model: userModel,
     data: [
-      { userName, email, password: hashedPassword, phone: encryptedPhone },
+      {
+        userName,
+        email,
+        password: hashedPassword,
+        phone: encryptedPhone,
+        confirmEmailOTP: otpHashed,
+      },
     ],
   });
+
+  // send email
+
+  emailEvent.emit("confirmEmail", { to: email, userName, otp });
 
   return successResponse({
     res,
@@ -50,12 +74,50 @@ export const signup = async (req, res) => {
   });
 };
 
+// expire time for otp 5 minutes
+// api resend otp
+
+export const confirmEmail = async (req, res) => {
+  const { email, otp } = req.body;
+
+  const user = await findOne({
+    model: userModel,
+    filter: {
+      email,
+      confirmEmailOTP: { $exists: true },
+      confirmEmail: { $exists: false },
+    },
+  });
+
+  if (!user) throw NotFoundException({ message: "User not found" });
+
+  const isMatch = await compareHash({
+    plainText: otp,
+    hashedText: user.confirmEmailOTP,
+    algorithm: hashEnum.Argon2,
+  });
+
+  if (!isMatch) throw BadRequestException({ message: "Invalid otp" });
+
+  await updateOne({
+    model: userModel,
+    filter: { email },
+    update: { confirmEmail: Date.now(), $unset: { confirmEmailOTP: true } },
+  });
+
+  return successResponse({
+    res,
+    statusCode: 200,
+    message: "User Confirmed Successfully",
+  });
+};
+
 export const login = async (req, res) => {
   const { email, password } = req.body;
 
   const user = await findOne({
     model: userModel,
-    filter: { email },
+    filter: { email, confirmEmail: { $exists: true } },
   });
 
   if (!user) throw NotFoundException({ message: "User not found" });
@@ -63,7 +125,7 @@ export const login = async (req, res) => {
   const isMatch = await compareHash({
     plainText: password,
     hashedText: user.password,
-    algorithm: hashEnum.Bcrypt,
+    algorithm: hashEnum.Argon2,
   });
 
   if (!isMatch) throw BadRequestException({ message: "Invalid credentials" });
@@ -78,17 +140,82 @@ export const login = async (req, res) => {
   });
 };
 
-// export const refreshToken = async (req, res) => {
-//   // i need access token only
-//   const tokens = await getNewLoginCredentials(req.user);
+export const forgetPassword = async (req, res) => {
+  const { email } = req.body;
+  const otp = generateOTP();
+  const otpHashed = await generateHash({
+    plainText: otp,
+    algorithm: hashEnum.Argon2,
+  });
 
-//   successResponse({
-//     res,
-//     statusCode: 200,
-//     message: "Done",
-//     data: { tokens },
-//   });
-// };
+  const user = await findOneAndUpdate({
+    model: userModel,
+    filter: {
+      email,
+      confirmEmail: { $exists: true },
+      provider: ProviderEnum.System,
+    },
+    update: {
+      forgetPasswordOTP: otpHashed,
+    },
+  });
+
+  if (!user) throw NotFoundException("User Not Found");
+
+  emailEvent.emit("forgetPassword", {
+    to: email,
+    userName: user.userName,
+    otp,
+  });
+
+  return successResponse({
+    res,
+    message: "Check Your Inbox",
+  });
+};
+
+export const resetPassword = async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+
+  const user = await findOne({
+    model: userModel,
+    filter: {
+      email,
+      provider: ProviderEnum.System,
+      confirmEmail: { $exists: true },
+      forgetPasswordOTP: { $exists: true },
+    },
+  });
+
+  if (!user) throw NotFoundException({ message: "User not found" });
+
+  const isValidOTP = await compareHash({
+    plainText: otp,
+    hashedText: user.forgetPasswordOTP,
+    algorithm: hashEnum.Argon2,
+  });
+
+  if (!isValidOTP) throw BadRequestException({ message: "Invalid OTP" });
+
+  const newHashedPassword = await generateHash({
+    plainText: newPassword,
+    algorithm: hashEnum.Argon2,
+  });
+
+  await updateOne({
+    model: userModel,
+    filter: { email },
+    update: {
+      password: newHashedPassword,
+      $unset: { forgetPasswordOTP: true },
+    },
+  });
+
+  return successResponse({
+    res,
+    message: "Password reset successfully",
+  });
+};
 
 export const refreshToken = async (req, res) => {
   const { accessToken } = await getNewLoginCredentials(req.user);
@@ -153,5 +280,36 @@ export const loginWithGoogle = async (req, res) => {
     message: "Create",
     statusCode: 201,
     data: { credentials },
+  });
+};
+
+export const logout = async (req, res) => {
+  const { flag } = req.body;
+  let status = 200;
+  switch (flag) {
+    case LogoutTypeEnum.Logout:
+      await create({
+        model: TokenModel,
+        data: [
+          {
+            jti: req.decoded.jti,
+            userId: req.user._id,
+            expiresIn: Date.now() - req.decoded.exp,
+          },
+        ],
+      });
+      status = 201;
+    case LogoutTypeEnum.LogoutFromAll:
+      await updateOne({
+        model: userModel,
+        filter: { _id: req.user._id },
+        update: { changeCredentialsTime: Date.now() },
+      });
+      status = 200;
+  }
+  return successResponse({
+    res,
+    message: "Logout Successfully",
+    statusCode: status,
   });
 };

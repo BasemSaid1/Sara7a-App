@@ -1,11 +1,13 @@
-import { findById } from "../DB/db.repository.js";
+import { findById, findOne } from "../DB/db.repository.js";
 import userModel from "../DB/Models/user.model.js";
 import { signatureEnum, TokenTypeEnum } from "../Utils/enums/user.enum.js";
 import {
   BadRequestException,
   NotFoundException,
+  UnauthorizedException,
 } from "../Utils/response/error.response.js";
 import { getSignature, verifyToken } from "../Utils/tokens/token.js";
+import TokenModel from "./../DB/Models/token.model.js";
 
 export const decodedToken = async ({
   authorization,
@@ -30,12 +32,28 @@ export const decodedToken = async ({
         : signature.refreshSignature,
   });
 
+  // check is token is revoke => logout
+
+  const isRevoked = await findOne({
+    model: TokenModel,
+    filter: { jti: decoded.jti },
+  });
+
+  if (isRevoked) {
+    throw UnauthorizedException({ message: "Token Is Revoked" });
+  }
+
   const user = await findById({
     model: userModel,
     id: decoded.id,
   });
 
   if (!user) throw NotFoundException({ message: "user not found" });
+
+  if ((user.changeCredentialsTime?.getTime() || 0) > decoded.iat * 1000) {
+    throw UnauthorizedException({ message: "Token Is Expired" });
+  }
+
   return { user, decoded };
 };
 
@@ -59,8 +77,7 @@ export const authorization = ({ accessRole = [] }) => {
   return async (req, res, next) => {
     if (!accessRole.includes(req.user.role)) {
       throw BadRequestException("Unauthorized access");
-
-      return next();
     }
+    return next();
   };
 };
